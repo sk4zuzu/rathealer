@@ -1,0 +1,106 @@
+#!/usr/bin/env perl
+#
+# RATHEALER 1.0 20140407
+#
+# Simple mousewheel binding solution for rxvt-unicode terminal emulator.
+#
+# Copyright (c) 2014 Michał Opala (sk4zuzu@gmail.com)
+#
+# This file is part of RATHEALER.
+#
+# RATHEALER is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# RATHEALER is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with RATHEALER.  If not, see <http:#www.gnu.org/licenses/>.
+#
+
+use strict;
+use warnings;
+
+my%allowed_modifiers=(Control => 37,
+                            C => 37,
+                        Shift => 50,
+                            S => 50,
+                         Meta => 64,
+                            M => 64);
+
+my%keycode_masks=(50 => 1<<0,
+                  37 => 1<<2,
+                  64 => 1<<3);
+
+sub parse_modifier {
+    my($modifier)=@_;
+
+    my$mask    =0;
+    my@tokens  =split(/[-]/,$modifier);
+    my@keycodes=grep{$_=$allowed_modifiers{$_}
+                 if defined$allowed_modifiers{$_}}@tokens;
+
+    $mask|=$keycode_masks{$_}foreach(@keycodes);
+    $mask;
+}
+
+sub on_start {
+    my($term)=@_;
+
+    $term->{modifier}    =$term->x_resource('%.modifier')    ||'C';
+    $term->{button_up}   =$term->x_resource('%.button_up')   ||'4';
+    $term->{button_down} =$term->x_resource('%.button_down') ||'5';
+    $term->{keycode_up}  =$term->x_resource('%.keycode_up')  ||'111';
+    $term->{keycode_down}=$term->x_resource('%.keycode_down')||'116';
+
+    $term->{_desired_mask}=parse_modifier($term->{modifier});
+    $term->{_current_mask}=0;
+    
+    undef;
+}
+
+sub on_button_press {
+    my($term,$event)=@_;
+
+    my$_keycode=$event->{button} eq $term->{button_up}
+               ?$term->{keycode_up}
+               :$event->{button} eq $term->{button_down}
+               ?$term->{keycode_down}
+               :undef;
+
+    if($_keycode and $term->{_current_mask} eq $term->{_desired_mask}){
+        $term->key_press($term->{_current_mask},$_keycode);
+    }
+
+    undef;
+}
+
+sub on_key_press {
+    my($term,$event,$keysym,$octets)=@_;
+
+    my$_keycode=$event->{keycode};
+
+    if(defined$keycode_masks{$_keycode}){
+        $term->{_current_mask}|=$keycode_masks{$_keycode};
+    }
+
+    undef;
+}
+
+sub on_key_release {
+    my($term,$event,$keysym)=@_;
+
+    my$_keycode=$event->{keycode};
+
+    if(defined$keycode_masks{$_keycode}){
+        $term->{_current_mask}&=~$keycode_masks{$_keycode};
+    }
+
+    undef;
+}
+
+# vim:ts=4:sw=4:et:
